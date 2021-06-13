@@ -8,6 +8,7 @@ import org.jsoup.select.Elements
 class Parser {
     companion object {
         const val BASE_URL_ALL_UNIVERSITIES = "https://vuzopedia.ru/region/city/67"
+        const val BASE_URL_UNIVER = "https://vuzopedia.ru"
     }
 
     private val allUniversitiesInNNPage = Jsoup.connect(BASE_URL_ALL_UNIVERSITIES).get()
@@ -68,10 +69,61 @@ class Parser {
         )
     }
 
-    fun getAllUniversitiesCards() {
-        val pages = getPageCount()
+    fun getAllSpecialities(href: String): List<SpecialityDataItem> {
+        val fullHref = "$BASE_URL_UNIVER$href/spec"
 
+        val doc = Jsoup.connect(fullHref).get()
+
+        return doc.select("div.itemSpecAll")
+            .map { speciality -> getSpeciality(speciality) }
     }
+
+    fun getSpeciality(specialityInfo: Element): SpecialityDataItem {
+
+        val budget: List<String?>?
+        val paid: List<String?>?
+
+        // title and href
+        val title = specialityInfo.select("a.spectittle").text()
+        val url = specialityInfo.select("a.spectittle").attr("href")
+
+        // study form
+        val studyForm = specialityInfo.select("div.itemSpecAllinfo")
+            .select("div > i").text()
+
+        // exams
+        val exams = specialityInfo.select("div.egeInVuzProg > span")
+            .text()
+
+        val specialityNums = specialityInfo.select("div.col-md-5").select("div.col-md-4.itemSpecAllParamWHide.newbl")
+
+        // cost
+        val cost = specialityNums[0].select("center").select("center > a.tooltipq").first()
+            .ownText().filter { it.isDigit() }
+
+
+        // budget
+        budget = if (specialityNums[1].ownText() == "нет") null
+        else specialityNums[1].select("center > a.tooltipq")
+            .map { element -> element.ownText().filter { it.isDigit() } }
+            .map { if (it.isEmpty() or it.isBlank()) null else it }
+
+        // paid
+        paid = if (specialityNums[2].ownText() == "нет") null
+        else specialityNums[2].select("center > a.tooltipq")
+            .map { element -> element.ownText().filter { it.isDigit() } }
+            .map { if (it.isEmpty() or it.isBlank()) null else it }
+
+        return SpecialityDataItem(
+            url, title, studyForm, exams,
+            if (cost == "") null else cost.toInt(),
+            if (budget?.get(0) == "" || budget?.get(0) == null) null else budget[0]?.toInt(),
+            if (budget?.get(1) == "" || budget?.get(1) == null) null else budget[1]?.toInt(),
+            if (paid?.get(0) == "" || paid?.get(0) == null) null else paid[0]?.toInt(),
+            if (paid?.get(1) == "" || paid?.get(1) == null) null else paid[1]?.toInt()
+        )
+    }
+
 
     fun getUniversitiesCards(): Elements {
         return allUniversitiesInNNPage.select("div.vuzesfullnorm")
